@@ -6,12 +6,11 @@ import psutil
 
 
 # ==========================================
-# 1. Convert Bytes to Gigabytes
+# 1. Convert Bytes to GiB
 # ==========================================
 
 def bytes_to_gb(value):
     """Convert bytes to GiB (binary gigabytes)."""
-
     return round(value / (1024 ** 3), 2)
 
 
@@ -20,8 +19,7 @@ def bytes_to_gb(value):
 # ==========================================
 
 def get_cpu_usage():
-    """Return CPU usage percentage."""
-
+    """Measure CPU usage over one second."""
     return psutil.cpu_percent(interval=1)
 
 
@@ -30,8 +28,7 @@ def get_cpu_usage():
 # ==========================================
 
 def get_memory_usage():
-    """Return memory information."""
-
+    """Return memory usage information."""
     memory = psutil.virtual_memory()
 
     return {
@@ -47,8 +44,7 @@ def get_memory_usage():
 # ==========================================
 
 def get_disk_usage():
-    """Return disk usage information."""
-
+    """Return root filesystem disk usage."""
     disk = psutil.disk_usage("/")
 
     return {
@@ -65,22 +61,20 @@ def get_disk_usage():
 
 def get_system_uptime():
     """Return system uptime in seconds."""
-
     boot_time = psutil.boot_time()
-
     uptime = time.time() - boot_time
 
     return round(uptime, 2)
 
 
 # ==========================================
-# 6. Collect All System Information
+# 6. Collect System Information
 # ==========================================
 
 def get_system_info():
-    """Collect CPU, memory, disk, and uptime."""
+    """Collect CPU, memory, disk, and uptime information."""
 
-    system_info = {
+    return {
         "timestamp": datetime.now().astimezone().isoformat(),
         "cpu_percent": get_cpu_usage(),
         "memory": get_memory_usage(),
@@ -88,15 +82,13 @@ def get_system_info():
         "uptime_seconds": get_system_uptime(),
     }
 
-    return system_info
-
 
 # ==========================================
 # 7. Check Resource Thresholds
 # ==========================================
 
 def check_thresholds(system_info):
-    """Check CPU, memory, and disk usage."""
+    """Check system resources against warning thresholds."""
 
     warnings = []
 
@@ -104,19 +96,15 @@ def check_thresholds(system_info):
     memory = system_info["memory"]["percent"]
     disk = system_info["disk"]["percent"]
 
-    # CPU threshold
     if cpu >= 80:
         warnings.append("WARNING: High CPU usage")
 
-    # Memory threshold
     if memory >= 85:
         warnings.append("WARNING: High memory usage")
 
-    # Disk threshold
     if disk >= 90:
         warnings.append("WARNING: High disk usage")
 
-    # No warnings
     if not warnings:
         warnings.append(
             "System resource usage is below warning thresholds"
@@ -131,11 +119,11 @@ def check_thresholds(system_info):
 
 if __name__ == "__main__":
 
-    # Collect system information
+    # Collect monitoring data
     information = get_system_info()
 
-    # Check resource thresholds
+    # Add threshold results to JSON
     information["warnings"] = check_thresholds(information)
 
-    # Display information as formatted JSON
+    # Display formatted JSON
     print(json.dumps(information, indent=4))

@@ -1,0 +1,26 @@
+# Python virtual environment
+.venv/
+venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Generated logs and reports
+logs/*
+!logs/.gitkeep
+
+reports/*
+!reports/.gitkeep
+
+# Testing and linting
+.pytest_cache/
+.ruff_cache/
+
+# VS Code settings
+.vscode/

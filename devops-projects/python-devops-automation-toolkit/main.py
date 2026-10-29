@@ -1,7 +1,7 @@
 """
 Python DevOps Automation Toolkit
 
-Stage 9 - Main CLI Integration
+Stage 10 - Professional Logging & Error Handling
 
 Features:
 - Centralized configuration
@@ -9,21 +9,19 @@ Features:
 - Network diagnostics
 - Website health checking
 - Log analysis
-- Linux command execution
+- Safe Linux command execution
 - Combined monitoring
 - JSON report generation
+- Professional application logging
+- Module execution timing
 - Error handling
 - CLI exit codes
-
-Updated:
-- Fixed system threshold integration
-- Fixed website health detection
-- Fixed module registry mocking
 """
 
 import argparse
 import json
 import sys
+import time
 
 from pathlib import Path
 
@@ -55,6 +53,14 @@ from modules.report_generator import (
     save_configured_report,
 )
 
+from modules.logging_manager import (
+    setup_logging,
+    get_logger,
+    log_module_start,
+    log_module_result,
+    log_module_exception,
+)
+
 
 # ==========================================
 # 1. Constants
@@ -78,13 +84,22 @@ COMMAND_TO_MODULE = {
 
 
 # ==========================================
-# 2. Error Result
+# 2. Application Logger
+# ==========================================
+
+logger = get_logger()
+
+
+# ==========================================
+# 3. Standardized Error Result
 # ==========================================
 
 def error_result(module_name, error):
     """
-    Convert module errors into a
-    consistent result dictionary.
+    Convert module errors into a consistent
+    result dictionary.
+
+    Preserves the Stage 9 result structure.
     """
 
     return {
@@ -95,12 +110,14 @@ def error_result(module_name, error):
 
 
 # ==========================================
-# 3. System Monitor
+# 4. System Monitor
 # ==========================================
 
 def run_system(config):
     """
     Execute system monitoring.
+
+    Uses thresholds from config.json.
     """
 
     settings = config["system_monitor"]
@@ -132,7 +149,7 @@ def run_system(config):
 
 
 # ==========================================
-# 4. Network Checker
+# 5. Network Checker
 # ==========================================
 
 def run_network(config):
@@ -153,13 +170,19 @@ def run_network(config):
             "Network checker must return a dictionary"
         )
 
-    if isinstance(result.get("overall_status"), str):
+    if isinstance(
+        result.get("overall_status"),
+        str,
+    ):
         success = (
             result["overall_status"].upper()
             == "PASS"
         )
 
-    elif isinstance(result.get("tcp"), dict):
+    elif isinstance(
+        result.get("tcp"),
+        dict,
+    ):
         success = result["tcp"].get(
             "success",
             False,
@@ -178,7 +201,7 @@ def run_network(config):
 
 
 # ==========================================
-# 5. Website Checker (FIXED)
+# 6. Website Checker
 # ==========================================
 
 def run_website(config):
@@ -201,13 +224,22 @@ def run_website(config):
             "Website checker must return a dictionary"
         )
 
-    if isinstance(result.get("healthy"), bool):
+    if isinstance(
+        result.get("healthy"),
+        bool,
+    ):
         success = result["healthy"]
 
-    elif isinstance(result.get("success"), bool):
+    elif isinstance(
+        result.get("success"),
+        bool,
+    ):
         success = result["success"]
 
-    elif isinstance(result.get("overall_status"), str):
+    elif isinstance(
+        result.get("overall_status"),
+        str,
+    ):
         success = (
             result["overall_status"].upper()
             in (
@@ -230,7 +262,7 @@ def run_website(config):
 
 
 # ==========================================
-# 6. Log Analyzer
+# 7. Log Analyzer
 # ==========================================
 
 def run_logs(config):
@@ -262,12 +294,15 @@ def run_logs(config):
 
 
 # ==========================================
-# 7. Linux Command Runner
+# 8. Linux Command Runner
 # ==========================================
 
 def run_commands(config):
     """
     Execute approved Linux commands.
+
+    Individual command failures do not
+    stop the remaining commands.
     """
 
     settings = config["command_runner"]
@@ -290,12 +325,26 @@ def run_commands(config):
                     "Command runner must return a dictionary"
                 )
 
-            if isinstance(result.get("success"), bool):
+            if isinstance(
+                result.get("success"),
+                bool,
+            ):
                 command_success = result["success"]
 
-            elif isinstance(result.get("return_code"), int):
+            elif isinstance(
+                result.get("return_code"),
+                int,
+            ):
                 command_success = (
                     result["return_code"] == 0
+                )
+
+            elif isinstance(
+                result.get("returncode"),
+                int,
+            ):
+                command_success = (
+                    result["returncode"] == 0
                 )
 
             else:
@@ -317,6 +366,11 @@ def run_commands(config):
         ) as error:
 
             command_success = False
+
+            logger.error(
+                "Command execution failed: %s",
+                type(error).__name__,
+            )
 
             command_results[command] = {
                 "success": False,
@@ -342,11 +396,11 @@ def run_commands(config):
 
 
 # ==========================================
-# 8. Module Registry (TEST FIX)
+# 9. Module Registry
 # ==========================================
 
-# Lambda wrappers allow unittest.mock.patch
-# to replace the module functions correctly.
+# Lambda wrappers preserve compatibility
+# with unittest.mock.patch in Stage 9 tests.
 
 MODULE_RUNNERS = {
     "system_monitor": lambda config: run_system(config),
@@ -358,12 +412,19 @@ MODULE_RUNNERS = {
 
 
 # ==========================================
-# 9. Execute One Module
+# 10. Execute One Module
 # ==========================================
 
 def execute_module(module_name, config):
     """
-    Execute a single configured module.
+    Execute one configured module.
+
+    Features:
+    - Disabled module handling
+    - Execution timing
+    - Logging
+    - Result validation
+    - Exception handling
     """
 
     if module_name not in MODULE_RUNNERS:
@@ -374,6 +435,12 @@ def execute_module(module_name, config):
     settings = config[module_name]
 
     if not settings["enabled"]:
+
+        logger.info(
+            "Module %s skipped: disabled",
+            module_name,
+        )
+
         return {
             "success": None,
             "module": module_name,
@@ -382,6 +449,13 @@ def execute_module(module_name, config):
                 "Module disabled in configuration"
             ),
         }
+
+    log_module_start(
+        logger,
+        module_name,
+    )
+
+    start_time = time.perf_counter()
 
     try:
         result = MODULE_RUNNERS[module_name](
@@ -401,6 +475,17 @@ def execute_module(module_name, config):
                 "Module result must contain boolean success"
             )
 
+        duration_ms = (
+            time.perf_counter() - start_time
+        ) * 1000
+
+        log_module_result(
+            logger,
+            module_name,
+            result["success"],
+            duration_ms,
+        )
+
         return result
 
     except (
@@ -412,6 +497,22 @@ def execute_module(module_name, config):
         UnicodeError,
     ) as error:
 
+        duration_ms = (
+            time.perf_counter() - start_time
+        ) * 1000
+
+        log_module_exception(
+            logger,
+            module_name,
+            error,
+        )
+
+        logger.debug(
+            "Module %s failed after %.2f ms",
+            module_name,
+            duration_ms,
+        )
+
         return error_result(
             module_name,
             error,
@@ -419,13 +520,20 @@ def execute_module(module_name, config):
 
 
 # ==========================================
-# 10. Execute All Modules
+# 11. Execute All Modules
 # ==========================================
 
 def execute_all(config):
     """
     Execute all enabled modules.
+
+    Disabled modules are excluded
+    from the combined report.
     """
+
+    logger.info(
+        "Starting combined monitoring"
+    )
 
     results = {}
 
@@ -441,16 +549,31 @@ def execute_all(config):
 
         results[module_name] = result
 
+    successful = sum(
+        1
+        for result in results.values()
+        if result["success"]
+    )
+
+    failed = len(results) - successful
+
+    logger.info(
+        "Combined monitoring finished: "
+        "%d successful, %d failed",
+        successful,
+        failed,
+    )
+
     return results
 
 
 # ==========================================
-# 11. Print JSON
+# 12. Print JSON
 # ==========================================
 
 def print_json(data):
     """
-    Print formatted JSON.
+    Display formatted JSON.
     """
 
     print(
@@ -464,12 +587,13 @@ def print_json(data):
 
 
 # ==========================================
-# 12. Print Summary
+# 13. Print Text Summary
 # ==========================================
 
 def print_text_summary(results):
     """
-    Display monitoring summary.
+    Display monitoring results in
+    a readable terminal format.
     """
 
     print()
@@ -529,7 +653,7 @@ def print_text_summary(results):
 
 
 # ==========================================
-# 13. Resolve Configuration Paths
+# 14. Resolve Configuration Paths
 # ==========================================
 
 def prepare_config_paths(config, config_path):
@@ -571,12 +695,14 @@ def prepare_config_paths(config, config_path):
 
 
 # ==========================================
-# 14. CLI Argument Parser
+# 15. CLI Argument Parser
 # ==========================================
 
 def build_parser():
     """
     Build CLI argument parser.
+
+    Includes Stage 10 logging options.
     """
 
     parser = argparse.ArgumentParser(
@@ -585,11 +711,48 @@ def build_parser():
         )
     )
 
+    # --------------------------------------
+    # Configuration
+    # --------------------------------------
+
     parser.add_argument(
         "--config",
         default="config.json",
         help="Path to configuration file",
     )
+
+    # --------------------------------------
+    # Logging Options
+    # --------------------------------------
+
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        choices=[
+            "DEBUG",
+            "INFO",
+            "WARNING",
+            "ERROR",
+            "CRITICAL",
+        ],
+        help="Application logging level",
+    )
+
+    parser.add_argument(
+        "--log-file",
+        default=None,
+        help="Custom application log file",
+    )
+
+    parser.add_argument(
+        "--no-console-log",
+        action="store_true",
+        help="Disable console logging",
+    )
+
+    # --------------------------------------
+    # Commands
+    # --------------------------------------
 
     subparsers = parser.add_subparsers(
         dest="command",
@@ -620,6 +783,7 @@ def build_parser():
         )
 
         if command == "all":
+
             subparser.add_argument(
                 "--save",
                 action="store_true",
@@ -630,7 +794,7 @@ def build_parser():
 
 
 # ==========================================
-# 15. Main Application
+# 16. Main Application
 # ==========================================
 
 def main(argv=None):
@@ -638,14 +802,18 @@ def main(argv=None):
     Main application entry point.
 
     Exit codes:
-        0 = success
-        1 = failed check or application error
-        2 = invalid CLI arguments
+        0 = Success
+        1 = Failed check or application error
+        2 = Invalid CLI arguments
     """
 
     parser = build_parser()
 
     args = parser.parse_args(argv)
+
+    # --------------------------------------
+    # Load Configuration
+    # --------------------------------------
 
     try:
         config = load_config(
@@ -673,6 +841,58 @@ def main(argv=None):
         return 1
 
     # --------------------------------------
+    # Initialize Logging
+    # --------------------------------------
+
+    if args.log_file is None:
+
+        config_directory = Path(
+            args.config
+        ).expanduser().resolve().parent
+
+        log_file = (
+            config_directory
+            / "logs"
+            / "toolkit.log"
+        )
+
+    else:
+        log_file = Path(
+            args.log_file
+        ).expanduser()
+
+    try:
+        setup_logging(
+            log_file=log_file,
+            level=args.log_level,
+            max_bytes=1_000_000,
+            backup_count=3,
+            console=not args.no_console_log,
+        )
+
+    except (
+        OSError,
+        ValueError,
+    ) as error:
+
+        print(
+            "Logging initialization failed: "
+            f"{type(error).__name__}",
+            file=sys.stderr,
+        )
+
+        return 1
+
+    logger.info(
+        "Application started"
+    )
+
+    logger.debug(
+        "Selected command: %s",
+        args.command,
+    )
+
+    # --------------------------------------
     # Individual Module Commands
     # --------------------------------------
 
@@ -690,33 +910,71 @@ def main(argv=None):
         print_json(result)
 
         if result.get("status") == "SKIPPED":
+            logger.info(
+                "Application finished: module skipped"
+            )
             return 0
 
-        return (
+        exit_code = (
             0
             if result["success"]
             else 1
         )
 
+        logger.info(
+            "Application finished with exit code %d",
+            exit_code,
+        )
+
+        return exit_code
+
     # --------------------------------------
     # Combined Monitoring
     # --------------------------------------
 
-    results = execute_all(config)
-
-    report = generate_configured_report(
-        results,
-        config,
+    results = execute_all(
+        config
     )
 
+    try:
+        report = generate_configured_report(
+            results,
+            config,
+        )
+
+    except (
+        OSError,
+        ValueError,
+        RuntimeError,
+        KeyError,
+        TypeError,
+    ) as error:
+
+        logger.error(
+            "Report generation failed: %s",
+            type(error).__name__,
+        )
+
+        print(
+            "Report generation failed: "
+            f"{type(error).__name__}",
+            file=sys.stderr,
+        )
+
+        return 1
+
     if args.json:
-        print_json(report)
+        print_json(
+            report
+        )
 
     else:
-        print_text_summary(results)
+        print_text_summary(
+            results
+        )
 
     # --------------------------------------
-    # Report Saving
+    # Save Report
     # --------------------------------------
 
     should_save = (
@@ -735,6 +993,10 @@ def main(argv=None):
                 config,
             )
 
+            logger.info(
+                "Report saved successfully"
+            )
+
             print(
                 f"\nReport saved to: {saved_path}",
                 file=(
@@ -750,6 +1012,11 @@ def main(argv=None):
             FileNotFoundError,
         ) as error:
 
+            logger.error(
+                "Report saving failed: %s",
+                type(error).__name__,
+            )
+
             print(
                 f"Report saving failed: {error}",
                 file=sys.stderr,
@@ -757,15 +1024,26 @@ def main(argv=None):
 
             return 1
 
-    return (
+    # --------------------------------------
+    # Final Exit Code
+    # --------------------------------------
+
+    exit_code = (
         0
         if report["summary"]["failed_checks"] == 0
         else 1
     )
 
+    logger.info(
+        "Application finished with exit code %d",
+        exit_code,
+    )
+
+    return exit_code
+
 
 # ==========================================
-# 16. Program Entry Point
+# 17. Program Entry Point
 # ==========================================
 
 if __name__ == "__main__":

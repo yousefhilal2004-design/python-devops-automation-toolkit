@@ -1,26 +1,29 @@
-# Python virtual environment
+# Python
+__pycache__/
+*.py[cod]
 .venv/
 venv/
 
-# Python cache
-__pycache__/
-*.py[cod]
-
-# Environment variables and secrets
+# Environment and secrets
 .env
 .env.*
 !.env.example
 
-# Generated logs and reports
+# Application logs
 logs/*
 !logs/.gitkeep
+*.log
+*.log.*
 
+# Generated reports
 reports/*
 !reports/.gitkeep
 
-# Testing and linting
+# Test and coverage artifacts
+.coverage
 .pytest_cache/
-.ruff_cache/
+htmlcov/
 
-# VS Code settings
+# IDE files
 .vscode/
+.idea/

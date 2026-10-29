@@ -4,26 +4,33 @@ __pycache__/
 .venv/
 venv/
 
-# Environment and secrets
+# Environment variables
 .env
 .env.*
 !.env.example
 
-# Application logs
+# Logs
 logs/*
 !logs/.gitkeep
 *.log
 *.log.*
+!sample_logs/application.log
 
 # Generated reports
 reports/*
 !reports/.gitkeep
 
-# Test and coverage artifacts
+# Testing
 .coverage
-.pytest_cache/
+.coverage.*
 htmlcov/
+.pytest_cache/
+.ruff_cache/
 
-# IDE files
+# IDE
 .vscode/
 .idea/
+
+# Operating system
+.DS_Store
+Thumbs.db

@@ -1,56 +1,117 @@
+"""
+System Monitoring Module
+
+Python DevOps Automation Toolkit
+
+Features:
+- System information
+- CPU monitoring
+- Memory monitoring
+- Disk monitoring
+- System uptime
+- Configurable resource thresholds
+- JSON output
+
+Stage 2 - Updated for Stage 9 Integration
+"""
+
 import json
-import time
-from datetime import datetime
+import platform
+import socket
+
+from datetime import datetime, timezone
 
 import psutil
 
 
 # ==========================================
-# 1. Convert Bytes to GiB
+# 1. Generate Timestamp
 # ==========================================
 
-def bytes_to_gb(value):
-    """Convert bytes to GiB (binary gigabytes)."""
-    return round(value / (1024 ** 3), 2)
+def get_timestamp():
+    """
+    Return current UTC timestamp.
+    """
 
-
-# ==========================================
-# 2. CPU Monitoring
-# ==========================================
-
-def get_cpu_usage():
-    """Measure CPU usage over one second."""
-    return psutil.cpu_percent(interval=1)
+    return datetime.now(
+        timezone.utc
+    ).isoformat()
 
 
 # ==========================================
-# 3. Memory Monitoring
+# 2. CPU Information
 # ==========================================
 
-def get_memory_usage():
-    """Return memory usage information."""
+def get_cpu_info():
+    """
+    Return CPU usage information.
+    """
+
+    return {
+        "percent": psutil.cpu_percent(
+            interval=0.5
+        ),
+        "physical_cores": psutil.cpu_count(
+            logical=False
+        ),
+        "logical_cores": psutil.cpu_count(
+            logical=True
+        ),
+    }
+
+
+# ==========================================
+# 3. Memory Information
+# ==========================================
+
+def get_memory_info():
+    """
+    Return memory usage information.
+    """
+
     memory = psutil.virtual_memory()
 
     return {
-        "total_gb": bytes_to_gb(memory.total),
-        "used_gb": bytes_to_gb(memory.used),
-        "available_gb": bytes_to_gb(memory.available),
+        "total_gb": round(
+            memory.total / (1024 ** 3),
+            2,
+        ),
+        "available_gb": round(
+            memory.available / (1024 ** 3),
+            2,
+        ),
+        "used_gb": round(
+            memory.used / (1024 ** 3),
+            2,
+        ),
         "percent": memory.percent,
     }
 
 
 # ==========================================
-# 4. Disk Monitoring
+# 4. Disk Information
 # ==========================================
 
-def get_disk_usage():
-    """Return root filesystem disk usage."""
+def get_disk_info():
+    """
+    Return disk usage information.
+    """
+
     disk = psutil.disk_usage("/")
 
     return {
-        "total_gb": bytes_to_gb(disk.total),
-        "used_gb": bytes_to_gb(disk.used),
-        "free_gb": bytes_to_gb(disk.free),
+        "total_gb": round(
+            disk.total / (1024 ** 3),
+            2,
+        ),
+        "used_gb": round(
+            disk.used / (1024 ** 3),
+            2,
+        ),
+        "free_gb": round(
+            disk.free / (1024 ** 3),
+            2,
+        ),
         "percent": disk.percent,
     }
 
@@ -59,51 +120,169 @@ def get_disk_usage():
 # 5. System Uptime
 # ==========================================
 
-def get_system_uptime():
-    """Return system uptime in seconds."""
+def get_uptime():
+    """
+    Return system uptime information.
+    """
+
     boot_time = psutil.boot_time()
-    uptime = time.time() - boot_time
 
-    return round(uptime, 2)
+    now = datetime.now(
+        timezone.utc
+    ).timestamp()
 
+    uptime_seconds = max(
+        0,
+        int(now - boot_time),
+    )
 
-# ==========================================
-# 6. Collect System Information
-# ==========================================
+    days, remainder = divmod(
+        uptime_seconds,
+        86400,
+    )
 
-def get_system_info():
-    """Collect CPU, memory, disk, and uptime information."""
+    hours, remainder = divmod(
+        remainder,
+        3600,
+    )
+
+    minutes, seconds = divmod(
+        remainder,
+        60,
+    )
 
     return {
-        "timestamp": datetime.now().astimezone().isoformat(),
-        "cpu_percent": get_cpu_usage(),
-        "memory": get_memory_usage(),
-        "disk": get_disk_usage(),
-        "uptime_seconds": get_system_uptime(),
+        "boot_time": datetime.fromtimestamp(
+            boot_time,
+            timezone.utc,
+        ).isoformat(),
+        "uptime_seconds": uptime_seconds,
+        "uptime_formatted": (
+            f"{days}d {hours}h "
+            f"{minutes}m {seconds}s"
+        ),
     }
 
 
 # ==========================================
-# 7. Check Resource Thresholds
+# 6. Complete System Information
 # ==========================================
 
-def check_thresholds(system_info):
-    """Check system resources against warning thresholds."""
+def get_system_info():
+    """
+    Collect system monitoring information.
+
+    Returns a JSON-compatible dictionary.
+    """
+
+    cpu = get_cpu_info()
+
+    return {
+        "timestamp": get_timestamp(),
+        "hostname": socket.gethostname(),
+        "operating_system": platform.system(),
+        "os_release": platform.release(),
+        "architecture": platform.machine(),
+        "cpu_percent": cpu["percent"],
+        "cpu": cpu,
+        "memory": get_memory_info(),
+        "disk": get_disk_info(),
+        "uptime": get_uptime(),
+    }
+
+
+# ==========================================
+# 7. Validate Threshold
+# ==========================================
+
+def validate_threshold(value, name):
+    """
+    Validate resource threshold values.
+
+    Valid range:
+        0 < threshold <= 100
+    """
+
+    if isinstance(value, bool):
+        raise ValueError(
+            f"{name} must be a number"
+        )
+
+    if not isinstance(
+        value,
+        (int, float),
+    ):
+        raise ValueError(
+            f"{name} must be a number"
+        )
+
+    if not 0 < value <= 100:
+        raise ValueError(
+            f"{name} must be between 0 and 100"
+        )
+
+    return value
+
+
+# ==========================================
+# 8. Check Resource Thresholds
+# ==========================================
+
+def check_thresholds(
+    system_info,
+    cpu_threshold=80,
+    memory_threshold=85,
+    disk_threshold=90,
+):
+    """
+    Check system resources against thresholds.
+
+    Default thresholds:
+        CPU: 80%
+        Memory: 85%
+        Disk: 90%
+
+    Thresholds can be customized through
+    the application's configuration.
+    """
+
+    validate_threshold(
+        cpu_threshold,
+        "CPU threshold",
+    )
+
+    validate_threshold(
+        memory_threshold,
+        "Memory threshold",
+    )
+
+    validate_threshold(
+        disk_threshold,
+        "Disk threshold",
+    )
 
     warnings = []
 
     cpu = system_info["cpu_percent"]
+
     memory = system_info["memory"]["percent"]
+
     disk = system_info["disk"]["percent"]
 
-    if cpu >= 80:
-        warnings.append("WARNING: High CPU usage")
+    if cpu >= cpu_threshold:
+        warnings.append(
+            "WARNING: High CPU usage"
+        )
 
-    if memory >= 85:
-        warnings.append("WARNING: High memory usage")
+    if memory >= memory_threshold:
+        warnings.append(
+            "WARNING: High memory usage"
+        )
 
-    if disk >= 90:
-        warnings.append("WARNING: High disk usage")
+    if disk >= disk_threshold:
+        warnings.append(
+            "WARNING: High disk usage"
+        )
 
     if not warnings:
         warnings.append(
@@ -114,16 +293,27 @@ def check_thresholds(system_info):
 
 
 # ==========================================
-# 8. Main Program
+# 9. Main Program
 # ==========================================
 
-if __name__ == "__main__":
+def main():
+    """
+    Run standalone system monitoring.
+    """
 
-    # Collect monitoring data
     information = get_system_info()
 
-    # Add threshold results to JSON
-    information["warnings"] = check_thresholds(information)
+    information["warnings"] = check_thresholds(
+        information
+    )
 
-    # Display formatted JSON
-    print(json.dumps(information, indent=4))
+    print(
+        json.dumps(
+            information,
+            indent=4,
+        )
+    )
+
+
+if __name__ == "__main__":
+    main()
